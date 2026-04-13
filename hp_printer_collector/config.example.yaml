@@ -31,33 +31,41 @@ timeout: 15
 # The application uses STARTTLS by default (port 587).
 # For a local relay set use_tls: false and port: 25.
 #
+# IMPORTANT – password quoting:
+#   Always wrap passwords in SINGLE quotes in YAML.
+#   Single quotes treat every character literally, so colons (:),
+#   hash signs (#), exclamation marks (!) and other special
+#   characters that appear in app passwords are safe.
+#   If your password itself contains a single quote, write it as ''
+#   (two single quotes).  Example:  password: 'it''s-a-secret'
+#
 # Gmail example:
 #   host: smtp.gmail.com
 #   port: 587
 #   use_tls: true
 #   username: you@gmail.com
-#   password: "your-app-password"   # Use an App Password, not your account password
+#   password: 'abcd efgh ijkl mnop'   # Gmail App Password (no account password)
 #
 # Microsoft 365 / Outlook example:
 #   host: smtp.office365.com
 #   port: 587
 #   use_tls: true
 #   username: you@company.com
-#   password: "your-password"
+#   password: 'your-password'
 #
 # Local relay (no auth) example:
 #   host: 127.0.0.1
 #   port: 25
 #   use_tls: false
-#   username: ""
-#   password: ""
+#   username: ''
+#   password: ''
 # ------------------------------------------------------------
 smtp:
   host: "smtp.gmail.com"
   port: 587
   use_tls: true
   username: "your-email@gmail.com"
-  password: "your-app-password"
+  password: 'your-app-password'        # Use single quotes — safe for all special characters
   from_address: "your-email@gmail.com"
 
 # ------------------------------------------------------------
