@@ -127,6 +127,7 @@ python main.py [OPTIONS]
                    (default: config.yaml next to main.py)
   --no-email       Collect data and save CSV, but skip sending email
   --no-csv         Do not append results to the CSV history file
+  --test-smtp      Test SMTP credentials only — no printer data collected
 ```
 
 **Exit codes**
@@ -139,38 +140,63 @@ python main.py [OPTIONS]
 
 ---
 
-## Scheduling
+## Scheduling on Windows
 
-### Windows Task Scheduler (recommended for Windows)
+### Option A — Automated setup script (recommended)
 
-1. Open **Task Scheduler** → *Create Basic Task*
-2. **Name:** `HP Printer Monthly Report`
-3. **Trigger:** Monthly → Day `1` → time `07:00`
-4. **Action:** *Start a program*
-   - Program: `C:\path\to\hp_printer_collector\venv\Scripts\python.exe`
-   - Arguments: `C:\path\to\hp_printer_collector\main.py`
+A ready-made PowerShell script is included. It detects your Python path,
+creates the task, and prints a confirmation.
+
+1. Open **PowerShell as Administrator**
+   (Start → search *PowerShell* → right-click → *Run as administrator*)
+
+2. Navigate to the project folder and run the script:
+   ```powershell
+   cd C:\path\to\hp_printer_collector
+   .\schedule_task.ps1
+   ```
+
+3. If PowerShell blocks the script with an execution-policy error, run this
+   first (safe — only affects the current session):
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   ```
+
+4. Verify the task was created:
+   ```powershell
+   Get-ScheduledTask -TaskName "HP Printer Monthly Report"
+   ```
+
+5. Do a manual test run immediately:
+   ```powershell
+   Start-ScheduledTask -TaskName "HP Printer Monthly Report"
+   ```
+   Then check `printer_collector.log` for results.
+
+---
+
+### Option B — Manual GUI setup (Task Scheduler)
+
+1. Press `Win + R`, type `taskschd.msc`, press Enter
+2. In the right panel click **Create Basic Task…**
+3. **Name:** `HP Printer Monthly Report` → Next
+4. **Trigger:** Monthly → Next
+   - Months: *(select all)*
+   - Days: `1`
+   - Start time: `9:00:00 AM`
+   → Next
+5. **Action:** Start a program → Next
+   - Program/script: `C:\path\to\hp_printer_collector\venv\Scripts\python.exe`
+   - Add arguments: `"C:\path\to\hp_printer_collector\main.py"`
    - Start in: `C:\path\to\hp_printer_collector`
-5. **Finish** → tick *Open Properties dialog* → *Settings* tab →
-   tick *Run task as soon as possible after a scheduled start is missed*
-6. Optionally tick *Run whether user is logged on or not* for headless operation
-
-**PowerShell one-liner to register the task:**
-
-```powershell
-$action  = New-ScheduledTaskAction `
-    -Execute "C:\path\to\venv\Scripts\python.exe" `
-    -Argument "C:\path\to\hp_printer_collector\main.py" `
-    -WorkingDirectory "C:\path\to\hp_printer_collector"
-
-$trigger = New-ScheduledTaskTrigger -Monthly -DaysOfMonth 1 -At "07:00"
-
-Register-ScheduledTask `
-    -TaskName "HP Printer Monthly Report" `
-    -Action $action `
-    -Trigger $trigger `
-    -RunLevel Highest `
-    -Description "Collect HP printer stats and email monthly report"
-```
+   → Next
+6. Tick **Open the Properties dialog when I click Finish** → Finish
+7. In the Properties dialog:
+   - **General tab** → tick *Run whether user is logged on or not* for
+     headless/server operation (you will be prompted for your Windows password)
+   - **Settings tab** → tick *Run task as soon as possible after a scheduled
+     start is missed* (protects against the PC being off on the 1st)
+8. Click **OK**
 
 ---
 
@@ -179,8 +205,8 @@ Register-ScheduledTask `
 Add to your crontab (`crontab -e`):
 
 ```cron
-# Run at 07:00 on the 1st of every month
-0 7 1 * * /path/to/hp_printer_collector/venv/bin/python /path/to/hp_printer_collector/main.py >> /path/to/hp_printer_collector/cron.log 2>&1
+# Run at 09:00 on the 1st of every month
+0 9 1 * * /path/to/hp_printer_collector/venv/bin/python /path/to/hp_printer_collector/main.py >> /path/to/hp_printer_collector/cron.log 2>&1
 ```
 
 ---
