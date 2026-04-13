@@ -35,7 +35,7 @@ import yaml
 
 from hp_printer_collector.logger_setup import setup_logger
 from hp_printer_collector.scraper import collect_printer_data
-from hp_printer_collector.email_reporter import send_report
+from hp_printer_collector.email_reporter import send_report, test_smtp_connection
 from hp_printer_collector.storage import save_to_csv
 
 # Module-level logger; configured properly after config is loaded.
@@ -110,6 +110,11 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--no-csv",
         action="store_true",
         help="Do not append results to the CSV history file.",
+    )
+    parser.add_argument(
+        "--test-smtp",
+        action="store_true",
+        help="Test SMTP credentials and exit without collecting printer data.",
     )
     return parser.parse_args(argv)
 
@@ -196,6 +201,14 @@ def run(config_path: str, send_email: bool = True, write_csv: bool = True) -> in
 
 def main() -> None:
     args = parse_args()
+
+    if args.test_smtp:
+        cfg = load_config(args.config)
+        log_cfg = cfg.get("logging", {})
+        setup_logger(log_file=log_cfg.get("file", "printer_collector.log"), level="DEBUG")
+        test_smtp_connection(cfg.get("smtp", {}))
+        sys.exit(0)
+
     exit_code = run(
         config_path=args.config,
         send_email=not args.no_email,

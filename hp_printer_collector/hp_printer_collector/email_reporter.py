@@ -242,21 +242,38 @@ def send_report(
 
     host = smtp_cfg.get("host", "localhost")
     port = int(smtp_cfg.get("port", 587))
-    use_tls = smtp_cfg.get("use_tls", True)
     username = smtp_cfg.get("username", "")
     password = smtp_cfg.get("password", "")
 
+    # Determine connection mode:
+    #   use_ssl  : True  → smtplib.SMTP_SSL  (implicit TLS, typically port 465)
+    #   use_tls  : True  → STARTTLS upgrade   (typically port 587)
+    #   both False       → plain SMTP          (local relay, port 25)
+    #
+    # If neither flag is set explicitly the port number is used to infer the
+    # right mode: 465 → SSL, anything else → STARTTLS.
+    use_ssl = smtp_cfg.get("use_ssl", port == 465)
+    use_tls = smtp_cfg.get("use_tls", not use_ssl)  # STARTTLS when not SSL
+
+    mode_label = "SSL/TLS (port 465)" if use_ssl else ("STARTTLS (port 587)" if use_tls else "plain")
     logger.info(
-        "Sending report to %d recipient(s) via %s:%d (TLS=%s)",
-        len(recipients),
-        host,
-        port,
-        use_tls,
+        "Sending report to %d recipient(s) via %s:%d  mode=%s  user=%s",
+        len(recipients), host, port, mode_label, username or "<none>",
     )
 
     try:
-        if use_tls:
-            # STARTTLS — connects on plain port then upgrades (port 587 default)
+        if use_ssl:
+            # Implicit TLS from the first byte — used on port 465
+            import ssl as _ssl
+            ctx = _ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, timeout=30, context=ctx) as server:
+                server.ehlo()
+                if username:
+                    server.login(username, password)
+                server.sendmail(msg["From"], recipients, msg.as_string())
+
+        elif use_tls:
+            # Plain connect then STARTTLS upgrade — used on port 587
             with smtplib.SMTP(host, port, timeout=30) as server:
                 server.ehlo()
                 server.starttls()
@@ -264,8 +281,9 @@ def send_report(
                 if username:
                     server.login(username, password)
                 server.sendmail(msg["From"], recipients, msg.as_string())
+
         else:
-            # Plain SMTP (local relay, port 25)
+            # Unauthenticated plain SMTP — local relay on port 25
             with smtplib.SMTP(host, port, timeout=30) as server:
                 server.ehlo()
                 if username:
@@ -276,7 +294,21 @@ def send_report(
         return True
 
     except smtplib.SMTPAuthenticationError as exc:
-        logger.error("SMTP authentication failed for user '%s': %s", username, exc)
+        logger.error(
+            "SMTP authentication failed for user '%s' on %s:%d\n"
+            "  Raw server response: %s\n"
+            "  Troubleshooting tips:\n"
+            "    • Gmail: you MUST use a 16-character App Password — your regular\n"
+            "      account password is rejected by SMTP even if it works on the web.\n"
+            "      Create one at https://myaccount.google.com/apppasswords\n"
+            "      (requires 2-Step Verification to be enabled on your account)\n"
+            "    • Outlook/Office 365: basic SMTP auth may be disabled at the tenant\n"
+            "      or mailbox level.  Ask your admin to run:\n"
+            "      Set-CASMailbox -Identity %s -SmtpClientAuthenticationDisabled $false\n"
+            "    • Wrong port/mode: Gmail uses port 587 + STARTTLS or port 465 + SSL.\n"
+            "      Check config: use_ssl: true  port: 465   OR   use_tls: true  port: 587",
+            username, host, port, exc, username,
+        )
     except smtplib.SMTPConnectError as exc:
         logger.error("Cannot connect to SMTP server %s:%d: %s", host, port, exc)
     except smtplib.SMTPException as exc:
@@ -285,3 +317,58 @@ def send_report(
         logger.error("Network error while sending email: %s", exc)
 
     return False
+
+
+def test_smtp_connection(smtp_cfg: dict) -> None:
+    """
+    Send a plain test message to verify SMTP credentials and connectivity.
+
+    Call this via:  python main.py --test-smtp
+    Raises no exceptions — all outcomes are written to the logger.
+    """
+    host = smtp_cfg.get("host", "")
+    port = int(smtp_cfg.get("port", 587))
+    username = smtp_cfg.get("username", "")
+    password = smtp_cfg.get("password", "")
+    from_addr = smtp_cfg.get("from_address", username)
+    use_ssl = smtp_cfg.get("use_ssl", port == 465)
+    use_tls = smtp_cfg.get("use_tls", not use_ssl)
+
+    mode = "SSL" if use_ssl else ("STARTTLS" if use_tls else "plain")
+    logger.info("=== SMTP connectivity test ===")
+    logger.info("Host      : %s", host)
+    logger.info("Port      : %d", port)
+    logger.info("Mode      : %s", mode)
+    logger.info("Username  : %s", username or "<none>")
+    logger.info("From addr : %s", from_addr)
+
+    import ssl as _ssl
+
+    try:
+        if use_ssl:
+            ctx = _ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, timeout=15, context=ctx) as server:
+                server.ehlo()
+                if username:
+                    server.login(username, password)
+                logger.info("SUCCESS – connected and authenticated via SSL on port %d", port)
+        elif use_tls:
+            with smtplib.SMTP(host, port, timeout=15) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                if username:
+                    server.login(username, password)
+                logger.info("SUCCESS – connected and authenticated via STARTTLS on port %d", port)
+        else:
+            with smtplib.SMTP(host, port, timeout=15) as server:
+                server.ehlo()
+                logger.info("SUCCESS – connected (no auth) via plain SMTP on port %d", port)
+
+    except smtplib.SMTPAuthenticationError as exc:
+        logger.error("AUTHENTICATION FAILED: %s", exc)
+        logger.error("See the troubleshooting tips in the log above.")
+    except smtplib.SMTPConnectError as exc:
+        logger.error("CONNECTION FAILED: %s", exc)
+    except OSError as exc:
+        logger.error("NETWORK ERROR: %s", exc)

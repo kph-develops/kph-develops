@@ -39,23 +39,48 @@ timeout: 15
 #   If your password itself contains a single quote, write it as ''
 #   (two single quotes).  Example:  password: 'it''s-a-secret'
 #
-# Gmail example:
+# Connection modes – pick the one that matches your provider:
+#
+#   Mode A – STARTTLS (port 587)   ← most common
+#     use_ssl: false
+#     use_tls: true
+#     port: 587
+#
+#   Mode B – Implicit SSL (port 465)
+#     use_ssl: true
+#     use_tls: false
+#     port: 465
+#
+#   Mode C – Plain/relay (port 25, no auth)
+#     use_ssl: false
+#     use_tls: false
+#     port: 25
+#
+# NOTE: if you omit use_ssl and use_tls the port number is used to
+#       auto-detect: port 465 → SSL, everything else → STARTTLS.
+#
+# Gmail:
 #   host: smtp.gmail.com
-#   port: 587
+#   port: 587          # or 465 with use_ssl: true
 #   use_tls: true
 #   username: you@gmail.com
-#   password: 'abcd efgh ijkl mnop'   # Gmail App Password (no account password)
+#   password: 'abcd efgh ijkl mnop'   # 16-char App Password (NOT your account password)
+#                                     # Create at: myaccount.google.com/apppasswords
+#                                     # Requires 2-Step Verification to be enabled
 #
-# Microsoft 365 / Outlook example:
+# Microsoft 365 / Outlook:
 #   host: smtp.office365.com
 #   port: 587
 #   use_tls: true
 #   username: you@company.com
 #   password: 'your-password'
+#   # If auth fails, an admin must enable SMTP AUTH for your mailbox in
+#   # the Microsoft 365 admin centre (Settings › Mail › POP/IMAP/SMTP)
 #
-# Local relay (no auth) example:
+# Local relay (no auth):
 #   host: 127.0.0.1
 #   port: 25
+#   use_ssl: false
 #   use_tls: false
 #   username: ''
 #   password: ''
@@ -63,6 +88,7 @@ timeout: 15
 smtp:
   host: "smtp.gmail.com"
   port: 587
+  use_ssl: false   # true = implicit SSL on port 465; false = STARTTLS on port 587
   use_tls: true
   username: "your-email@gmail.com"
   password: 'your-app-password'        # Use single quotes — safe for all special characters
