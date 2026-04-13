@@ -1,0 +1,97 @@
+# ============================================================
+# HP Printer Usage Collector – example configuration
+# ============================================================
+# Copy this file to config.yaml and fill in real values.
+# All paths may be absolute or relative to the project root.
+# ============================================================
+
+# ------------------------------------------------------------
+# Printers
+# List one entry per HP printer.  'name' is optional but
+# recommended; it appears in logs and the email report.
+# ------------------------------------------------------------
+printers:
+  - name: "Office Printer 1"
+    ip: "192.168.1.100"
+
+  - name: "Reception Printer"
+    ip: "192.168.1.101"
+
+  # Add more printers as needed:
+  # - name: "Warehouse Printer"
+  #   ip: "10.0.0.50"
+
+# ------------------------------------------------------------
+# HTTP timeout for printer requests (seconds)
+# ------------------------------------------------------------
+timeout: 15
+
+# ------------------------------------------------------------
+# SMTP settings
+# The application uses STARTTLS by default (port 587).
+# For a local relay set use_tls: false and port: 25.
+#
+# Gmail example:
+#   host: smtp.gmail.com
+#   port: 587
+#   use_tls: true
+#   username: you@gmail.com
+#   password: "your-app-password"   # Use an App Password, not your account password
+#
+# Microsoft 365 / Outlook example:
+#   host: smtp.office365.com
+#   port: 587
+#   use_tls: true
+#   username: you@company.com
+#   password: "your-password"
+#
+# Local relay (no auth) example:
+#   host: 127.0.0.1
+#   port: 25
+#   use_tls: false
+#   username: ""
+#   password: ""
+# ------------------------------------------------------------
+smtp:
+  host: "smtp.gmail.com"
+  port: 587
+  use_tls: true
+  username: "your-email@gmail.com"
+  password: "your-app-password"
+  from_address: "your-email@gmail.com"
+
+# ------------------------------------------------------------
+# Email report settings
+# ------------------------------------------------------------
+email:
+  recipients:
+    - "admin@company.com"
+    - "it-support@company.com"
+
+  # Optional: override the auto-generated subject line
+  # subject: "Monthly HP Printer Report – April 2026"
+
+# ------------------------------------------------------------
+# Alerts
+# Toner levels below toner_low_threshold % are flagged in the
+# report with a warning and highlighted in the HTML email.
+# ------------------------------------------------------------
+alerts:
+  toner_low_threshold: 20
+
+# ------------------------------------------------------------
+# Historical CSV storage
+# A row is appended on every run.  Set csv_file to an absolute
+# path if you want the data stored outside the project folder.
+# ------------------------------------------------------------
+storage:
+  csv_file: "printer_history.csv"
+
+# ------------------------------------------------------------
+# Logging
+# level: DEBUG | INFO | WARNING | ERROR | CRITICAL
+# file:  path to the rotating log file
+# ------------------------------------------------------------
+logging:
+  level: "INFO"
+  file: "printer_collector.log"
