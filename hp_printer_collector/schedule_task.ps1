@@ -1,10 +1,9 @@
 # =============================================================================
 # HP Printer Usage Collector - Windows Task Scheduler Setup
 # =============================================================================
-# Compatible with ALL Windows versions (uses schtasks.exe, not PS cmdlets).
+# Compatible with ALL Windows versions (uses schtasks.exe only).
 #
-# Run this script ONCE from an elevated PowerShell prompt:
-#
+# Run ONCE from an elevated PowerShell prompt:
 #   cd C:\path\to\hp_printer_collector
 #   .\schedule_task.ps1
 #
@@ -14,7 +13,9 @@
 
 #Requires -RunAsAdministrator
 
-$ErrorActionPreference = "Stop"
+# Use Continue so a non-zero exit from schtasks.exe does not throw;
+# we check $LASTEXITCODE ourselves where it matters.
+$ErrorActionPreference = "Continue"
 
 $TaskName = "HP Printer Monthly Report"
 
@@ -53,52 +54,50 @@ if (-not (Test-Path $MainScript)) {
 }
 
 # ---------------------------------------------------------------------------
-# Create a small .bat launcher so schtasks.exe gets the right working dir
+# Create a .bat launcher (schtasks.exe has no working-directory flag)
 # ---------------------------------------------------------------------------
-# schtasks.exe has no /working-directory flag, so we wrap the call in a
-# batch file that does "cd /d <project>" before running Python.
 
 $LauncherPath = Join-Path $ProjectDir "run_report.bat"
 $LauncherContent = "@echo off`r`ncd /d `"$ProjectDir`"`r`n`"$PythonExe`" `"$MainScript`"`r`n"
 Set-Content -Path $LauncherPath -Value $LauncherContent -Encoding ASCII
-
-Write-Host "Created launcher : $LauncherPath" -ForegroundColor Cyan
+Write-Host "Created launcher  : $LauncherPath" -ForegroundColor Cyan
 
 # ---------------------------------------------------------------------------
-# Remove existing task if present
+# Remove existing task silently (ignore error when task does not exist)
 # ---------------------------------------------------------------------------
 
-$existing = schtasks /query /tn $TaskName 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "Removing existing task '$TaskName'..." -ForegroundColor Yellow
-    schtasks /delete /tn $TaskName /f | Out-Null
-}
+Write-Host "Removing existing task (if any)..." -ForegroundColor Yellow
+schtasks /delete /tn $TaskName /f 2>$null | Out-Null
+# Reset exit code - a non-zero here just means the task didn't exist, which is fine
+$global:LASTEXITCODE = 0
 
 # ---------------------------------------------------------------------------
 # Register the task via schtasks.exe
+# Use an array so quoting and spaces are handled correctly
 # ---------------------------------------------------------------------------
-# /sc MONTHLY   - monthly schedule
-# /d  1         - on the 1st day of the month
-# /st 09:00     - at 09:00 AM
-# /f            - overwrite silently if task already exists
-# /rl HIGHEST   - run with highest available privileges
 
-schtasks /create `
-    /tn $TaskName `
-    /tr "`"$LauncherPath`"" `
-    /sc MONTHLY `
-    /d  1 `
-    /st 09:00 `
-    /rl HIGHEST `
-    /f
+$schtasksArgs = @(
+    "/create",
+    "/tn",  $TaskName,
+    "/tr",  "`"$LauncherPath`"",
+    "/sc",  "MONTHLY",
+    "/d",   "1",
+    "/st",  "09:00",
+    "/rl",  "HIGHEST",
+    "/f"
+)
+
+Write-Host "Registering scheduled task..." -ForegroundColor Cyan
+& schtasks.exe @schtasksArgs
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "schtasks.exe failed with exit code $LASTEXITCODE"
+    Write-Host ""
+    Write-Error "schtasks.exe failed (exit code $LASTEXITCODE). See the error above."
     exit 1
 }
 
 # ---------------------------------------------------------------------------
-# Verify and summarise
+# Summary
 # ---------------------------------------------------------------------------
 
 Write-Host ""
@@ -112,7 +111,7 @@ Write-Host "  Script      : $MainScript"
 Write-Host "  Working dir : $ProjectDir"
 Write-Host "  Schedule    : 09:00 AM on the 1st of every month"
 Write-Host ""
-Write-Host "Verify in Task Scheduler:" -ForegroundColor Cyan
+Write-Host "Verify in Task Scheduler GUI:" -ForegroundColor Cyan
 Write-Host "  taskschd.msc"
 Write-Host ""
 Write-Host "Run immediately for a quick test:" -ForegroundColor Cyan
