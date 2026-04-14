@@ -1,36 +1,28 @@
 # =============================================================================
 # HP Printer Usage Collector - Windows Task Scheduler Setup
 # =============================================================================
-# Compatible with Windows PowerShell 5.1 (ships with Windows 10/11)
+# Compatible with ALL Windows versions (uses schtasks.exe, not PS cmdlets).
 #
-# Run this script ONCE from an elevated PowerShell prompt to register a
-# monthly scheduled task that executes main.py at 09:00 on the 1st of
-# every month.
+# Run this script ONCE from an elevated PowerShell prompt:
 #
-# Usage (elevated PowerShell):
 #   cd C:\path\to\hp_printer_collector
 #   .\schedule_task.ps1
 #
 # To remove the task later:
-#   Unregister-ScheduledTask -TaskName "HP Printer Monthly Report" -Confirm:$false
+#   schtasks /delete /tn "HP Printer Monthly Report" /f
 # =============================================================================
 
 #Requires -RunAsAdministrator
 
 $ErrorActionPreference = "Stop"
 
+$TaskName = "HP Printer Monthly Report"
+
 # ---------------------------------------------------------------------------
-# Configuration - edit these if your layout differs
+# Locate Python
 # ---------------------------------------------------------------------------
 
-$TaskName        = "HP Printer Monthly Report"
-$TaskDescription = "Collect HP printer usage statistics and email a monthly report."
-
-# Resolve the directory containing this script
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-
-# Prefer the virtual-environment Python; fall back to system Python.
-# Note: avoid ?. (null-conditional) - not available in PowerShell 5.1
 $VenvPython = Join-Path $ProjectDir "venv\Scripts\python.exe"
 
 $SystemPythonCmd = Get-Command python -ErrorAction SilentlyContinue
@@ -45,8 +37,8 @@ if (Test-Path $VenvPython) {
     Write-Host "Using venv Python : $PythonExe" -ForegroundColor Cyan
 } elseif ($SystemPython) {
     $PythonExe = $SystemPython
-    Write-Warning "venv not found at '$VenvPython'. Falling back to system Python: $PythonExe"
-    Write-Warning "It is strongly recommended to create a venv first:"
+    Write-Warning "venv not found. Falling back to system Python: $PythonExe"
+    Write-Warning "Recommended: create a venv first with:"
     Write-Warning "  python -m venv venv"
     Write-Warning "  venv\Scripts\pip install -r requirements.txt"
 } else {
@@ -55,83 +47,77 @@ if (Test-Path $VenvPython) {
 }
 
 $MainScript = Join-Path $ProjectDir "main.py"
-
 if (-not (Test-Path $MainScript)) {
     Write-Error "main.py not found at '$MainScript'. Run this script from the project root."
     exit 1
 }
 
 # ---------------------------------------------------------------------------
-# Build the scheduled task components
+# Create a small .bat launcher so schtasks.exe gets the right working dir
 # ---------------------------------------------------------------------------
+# schtasks.exe has no /working-directory flag, so we wrap the call in a
+# batch file that does "cd /d <project>" before running Python.
 
-# Action: python main.py
-$Action = New-ScheduledTaskAction `
-    -Execute          $PythonExe `
-    -Argument         "`"$MainScript`"" `
-    -WorkingDirectory $ProjectDir
+$LauncherPath = Join-Path $ProjectDir "run_report.bat"
+$LauncherContent = "@echo off`r`ncd /d `"$ProjectDir`"`r`n`"$PythonExe`" `"$MainScript`"`r`n"
+Set-Content -Path $LauncherPath -Value $LauncherContent -Encoding ASCII
 
-# Trigger: 09:00 on the 1st of every month
-$Trigger = New-ScheduledTaskTrigger `
-    -Monthly `
-    -DaysOfMonth 1 `
-    -At "09:00"
-
-# Settings: run missed tasks, allow on demand, 1-hour timeout
-$Settings = New-ScheduledTaskSettingsSet `
-    -StartWhenAvailable `
-    -RunOnlyIfNetworkAvailable `
-    -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
-    -MultipleInstances IgnoreNew
-
-# Principal: run as the current user with highest available privileges
-$CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$Principal = New-ScheduledTaskPrincipal `
-    -UserId    $CurrentUser `
-    -LogonType Interactive `
-    -RunLevel  Highest
+Write-Host "Created launcher : $LauncherPath" -ForegroundColor Cyan
 
 # ---------------------------------------------------------------------------
-# Register (or update) the task
+# Remove existing task if present
 # ---------------------------------------------------------------------------
 
-$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-
-if ($existingTask) {
-    Write-Host "Task '$TaskName' already exists - updating it..." -ForegroundColor Yellow
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+$existing = schtasks /query /tn $TaskName 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Removing existing task '$TaskName'..." -ForegroundColor Yellow
+    schtasks /delete /tn $TaskName /f | Out-Null
 }
 
-Register-ScheduledTask `
-    -TaskName    $TaskName `
-    -Description $TaskDescription `
-    -Action      $Action `
-    -Trigger     $Trigger `
-    -Settings    $Settings `
-    -Principal   $Principal | Out-Null
+# ---------------------------------------------------------------------------
+# Register the task via schtasks.exe
+# ---------------------------------------------------------------------------
+# /sc MONTHLY   - monthly schedule
+# /d  1         - on the 1st day of the month
+# /st 09:00     - at 09:00 AM
+# /f            - overwrite silently if task already exists
+# /rl HIGHEST   - run with highest available privileges
+
+schtasks /create `
+    /tn $TaskName `
+    /tr "`"$LauncherPath`"" `
+    /sc MONTHLY `
+    /d  1 `
+    /st 09:00 `
+    /rl HIGHEST `
+    /f
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "schtasks.exe failed with exit code $LASTEXITCODE"
+    exit 1
+}
 
 # ---------------------------------------------------------------------------
 # Verify and summarise
 # ---------------------------------------------------------------------------
 
-$task     = Get-ScheduledTask     -TaskName $TaskName
-$taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName
-
 Write-Host ""
 Write-Host "=====================================================" -ForegroundColor Green
 Write-Host " Task registered successfully!"                        -ForegroundColor Green
 Write-Host "=====================================================" -ForegroundColor Green
-Write-Host "  Name        : $($task.TaskName)"
-Write-Host "  State       : $($task.State)"
+Write-Host "  Task name   : $TaskName"
+Write-Host "  Launcher    : $LauncherPath"
 Write-Host "  Python      : $PythonExe"
 Write-Host "  Script      : $MainScript"
 Write-Host "  Working dir : $ProjectDir"
-Write-Host "  Schedule    : 09:00 on the 1st of every month"
-Write-Host "  Next run    : $($taskInfo.NextRunTime)"
+Write-Host "  Schedule    : 09:00 AM on the 1st of every month"
 Write-Host ""
-Write-Host "To run the task immediately (for testing):" -ForegroundColor Cyan
-Write-Host "  Start-ScheduledTask -TaskName '$TaskName'"
+Write-Host "Verify in Task Scheduler:" -ForegroundColor Cyan
+Write-Host "  taskschd.msc"
 Write-Host ""
-Write-Host "To remove the task:" -ForegroundColor Cyan
-Write-Host "  Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false"
+Write-Host "Run immediately for a quick test:" -ForegroundColor Cyan
+Write-Host "  schtasks /run /tn `"$TaskName`""
+Write-Host ""
+Write-Host "Remove the task:" -ForegroundColor Cyan
+Write-Host "  schtasks /delete /tn `"$TaskName`" /f"
 Write-Host ""

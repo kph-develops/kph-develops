@@ -164,12 +164,12 @@ creates the task, and prints a confirmation.
 
 4. Verify the task was created:
    ```powershell
-   Get-ScheduledTask -TaskName "HP Printer Monthly Report"
+   schtasks /query /tn "HP Printer Monthly Report"
    ```
 
 5. Do a manual test run immediately:
    ```powershell
-   Start-ScheduledTask -TaskName "HP Printer Monthly Report"
+   schtasks /run /tn "HP Printer Monthly Report"
    ```
    Then check `printer_collector.log` for results.
 
