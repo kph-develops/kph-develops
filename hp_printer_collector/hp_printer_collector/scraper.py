@@ -136,7 +136,7 @@ def _clean_percent(raw: str) -> Optional[str]:
 PAGE_COUNT_IDS = {
     "total": "UsagePage.EquivalentImpressionsTable.Total.Total",
     "color": "UsagePage.EquivalentImpressionsTable.Color.Total",
-    "mono":  "UsagePage.EquivalentImpressionsTable.BlackAndWhite.Total",
+    "mono":  "UsagePage.EquivalentImpressionsTable.Monochrome.Total",
 }
 
 
