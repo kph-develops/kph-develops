@@ -78,9 +78,13 @@ def _build_plain_text(printer_results: List[dict], report_date: str, threshold: 
         if error:
             lines += [f"  ERROR: {error}", ""]
         else:
-            page_count = result.get("page_count")
+            def _fmt(n):
+                return f"{n:,}" if isinstance(n, int) else "N/A"
+
             lines += [
-                f"  Page count    : {page_count if page_count is not None else 'N/A':,}",
+                f"  Page count    : {_fmt(result.get('page_count'))}",
+                f"    Color       : {_fmt(result.get('page_count_color'))}",
+                f"    Monochrome  : {_fmt(result.get('page_count_mono'))}",
                 "  Toner levels",
                 f"    Black   : {result.get('toner_black') or 'N/A'}",
                 f"    Cyan    : {result.get('toner_cyan') or 'N/A'}",
@@ -152,19 +156,26 @@ def _build_html(printer_results: List[dict], report_date: str, threshold: int) -
             rows_html += f'<div class="error-box"><strong>Error:</strong> {error}</div>\n'
             continue
 
-        page_count = result.get("page_count")
-        page_str = f"{page_count:,}" if isinstance(page_count, int) else "N/A"
+        def _fmt(n):
+            return f"{n:,}" if isinstance(n, int) else "N/A"
+
+        total_str   = _fmt(result.get("page_count"))
+        color_str   = _fmt(result.get("page_count_color"))
+        mono_str    = _fmt(result.get("page_count_mono"))
 
         # Toner cells with conditional colouring
-        black_td = _toner_cell(result.get("toner_black"), threshold)
-        cyan_td = _toner_cell(result.get("toner_cyan"), threshold)
-        yellow_td = _toner_cell(result.get("toner_yellow"), threshold)
+        black_td   = _toner_cell(result.get("toner_black"),   threshold)
+        cyan_td    = _toner_cell(result.get("toner_cyan"),    threshold)
+        yellow_td  = _toner_cell(result.get("toner_yellow"),  threshold)
         magenta_td = _toner_cell(result.get("toner_magenta"), threshold)
 
         rows_html += f"""
 <table>
-  <tr><th colspan="2">Usage &amp; Toner Summary</th></tr>
-  <tr><td><strong>Page Count</strong></td><td>{page_str}</td></tr>
+  <tr><th colspan="2">Page Count</th></tr>
+  <tr><td><strong>Total</strong></td><td>{total_str}</td></tr>
+  <tr><td>&nbsp;&nbsp;Color</td><td>{color_str}</td></tr>
+  <tr><td>&nbsp;&nbsp;Monochrome</td><td>{mono_str}</td></tr>
+  <tr><th colspan="2">Toner Levels</th></tr>
   <tr><td><strong>Black</strong></td>{black_td}</tr>
   <tr><td><strong>Cyan</strong></td>{cyan_td}</tr>
   <tr><td><strong>Yellow</strong></td>{yellow_td}</tr>

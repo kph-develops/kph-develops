@@ -132,32 +132,56 @@ def _clean_percent(raw: str) -> Optional[str]:
 # Page-count parser (Usage Page)
 # ---------------------------------------------------------------------------
 
+# Element IDs for the three page-count rows on the Usage Page
+PAGE_COUNT_IDS = {
+    "total": "UsagePage.EquivalentImpressionsTable.Total.Total",
+    "color": "UsagePage.EquivalentImpressionsTable.Color.Total",
+    "mono":  "UsagePage.EquivalentImpressionsTable.BlackAndWhite.Total",
+}
 
-def parse_page_count(html: str) -> Optional[int]:
+
+def _parse_count_element(soup: BeautifulSoup, element_id: str) -> Optional[int]:
     """
-    Extract the total page count from the Usage Page HTML.
+    Extract a single integer page count from an element with the given id.
 
-    Target element:
-        <td id="UsagePage.EquivalentImpressionsTable.Total.Total">12,345</td>
-
-    Commas in the number are removed before conversion to int.
+    HP formats these numbers with locale-specific separators (commas or
+    periods), so both are stripped before int conversion.
+    Returns None when the element is absent or the text is not numeric.
     """
-    soup = BeautifulSoup(html, "html.parser")
-    element = _find_by_id(soup, "UsagePage.EquivalentImpressionsTable.Total.Total")
-
+    element = _find_by_id(soup, element_id)
     if element is None:
-        logger.warning("Page count element not found in Usage Page HTML")
+        logger.warning("Page count element %r not found in Usage Page HTML", element_id)
         return None
 
     raw = element.get_text(strip=True)
-    logger.debug("Raw page count text: %r", raw)
+    logger.debug("Raw page count text for %r: %r", element_id, raw)
 
     numeric_str = raw.replace(",", "").replace(".", "").strip()
     try:
         return int(numeric_str)
     except ValueError:
-        logger.warning("Could not convert page count %r to integer", raw)
+        logger.warning("Could not convert %r to integer for element %r", raw, element_id)
         return None
+
+
+def parse_page_counts(html: str) -> dict:
+    """
+    Extract total, color, and monochrome page counts from the Usage Page HTML.
+
+    Target elements:
+        <td id="UsagePage.EquivalentImpressionsTable.Total.Total">12,345</td>
+        <td id="UsagePage.EquivalentImpressionsTable.Color.Total">3,210</td>
+        <td id="UsagePage.EquivalentImpressionsTable.BlackAndWhite.Total">9,135</td>
+
+    Returns a dict with keys: total, color, mono.  Each value is an int or
+    None when the element could not be found or parsed.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    return {
+        "total": _parse_count_element(soup, PAGE_COUNT_IDS["total"]),
+        "color": _parse_count_element(soup, PAGE_COUNT_IDS["color"]),
+        "mono":  _parse_count_element(soup, PAGE_COUNT_IDS["mono"]),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +277,8 @@ def collect_printer_data(printer: dict, timeout: int = 15) -> dict:
         "name": name,
         "ip": ip,
         "page_count": None,
+        "page_count_color": None,
+        "page_count_mono": None,
         "toner_black": None,
         "toner_cyan": None,
         "toner_yellow": None,
@@ -262,14 +288,18 @@ def collect_printer_data(printer: dict, timeout: int = 15) -> dict:
 
     logger.info("Collecting data from printer '%s' (%s)", name, ip)
 
-    # --- Usage page (page count) ---
+    # --- Usage page (page counts) ---
     usage_html = fetch_page(ip, USAGE_ENDPOINT, timeout=timeout)
     if usage_html is None:
         result["error"] = f"Failed to fetch usage page from {ip}"
         logger.error(result["error"])
         return result
 
-    result["page_count"] = parse_page_count(usage_html)
+    counts = parse_page_counts(usage_html)
+    result["page_count"]       = counts["total"]
+    result["page_count_color"] = counts["color"]
+    result["page_count_mono"]  = counts["mono"]
+
     if result["page_count"] is None:
         logger.warning("Page count unavailable for printer '%s'", name)
 
@@ -281,15 +311,17 @@ def collect_printer_data(printer: dict, timeout: int = 15) -> dict:
         return result
 
     toner = parse_toner_levels(supplies_html)
-    result["toner_black"] = toner["black"]
-    result["toner_cyan"] = toner["cyan"]
-    result["toner_yellow"] = toner["yellow"]
+    result["toner_black"]   = toner["black"]
+    result["toner_cyan"]    = toner["cyan"]
+    result["toner_yellow"]  = toner["yellow"]
     result["toner_magenta"] = toner["magenta"]
 
     logger.info(
-        "Collected data for '%s': pages=%s  B=%s  C=%s  Y=%s  M=%s",
+        "Collected data for '%s': total=%s  color=%s  mono=%s  B=%s  C=%s  Y=%s  M=%s",
         name,
         result["page_count"],
+        result["page_count_color"],
+        result["page_count_mono"],
         result["toner_black"],
         result["toner_cyan"],
         result["toner_yellow"],
