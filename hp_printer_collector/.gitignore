@@ -1,0 +1,27 @@
+# Live config (contains credentials)
+config.yaml
+
+# Runtime output
+*.log
+*.log.*
+printer_history.csv
+cron.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp

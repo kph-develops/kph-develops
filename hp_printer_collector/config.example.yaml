@@ -1,0 +1,131 @@
+# ============================================================
+# HP Printer Usage Collector – example configuration
+# ============================================================
+# Copy this file to config.yaml and fill in real values.
+# All paths may be absolute or relative to the project root.
+# ============================================================
+
+# ------------------------------------------------------------
+# Printers
+# List one entry per HP printer.  'name' is optional but
+# recommended; it appears in logs and the email report.
+# ------------------------------------------------------------
+printers:
+  - name: "Office Printer 1"
+    ip: "192.168.1.100"
+
+  - name: "Reception Printer"
+    ip: "192.168.1.101"
+
+  # Add more printers as needed:
+  # - name: "Warehouse Printer"
+  #   ip: "10.0.0.50"
+
+# ------------------------------------------------------------
+# HTTP timeout for printer requests (seconds)
+# ------------------------------------------------------------
+timeout: 15
+
+# ------------------------------------------------------------
+# SMTP settings
+# The application uses STARTTLS by default (port 587).
+# For a local relay set use_tls: false and port: 25.
+#
+# IMPORTANT – password quoting:
+#   Always wrap passwords in SINGLE quotes in YAML.
+#   Single quotes treat every character literally, so colons (:),
+#   hash signs (#), exclamation marks (!) and other special
+#   characters that appear in app passwords are safe.
+#   If your password itself contains a single quote, write it as ''
+#   (two single quotes).  Example:  password: 'it''s-a-secret'
+#
+# Connection modes – pick the one that matches your provider:
+#
+#   Mode A – STARTTLS (port 587)   ← most common
+#     use_ssl: false
+#     use_tls: true
+#     port: 587
+#
+#   Mode B – Implicit SSL (port 465)
+#     use_ssl: true
+#     use_tls: false
+#     port: 465
+#
+#   Mode C – Plain/relay (port 25, no auth)
+#     use_ssl: false
+#     use_tls: false
+#     port: 25
+#
+# NOTE: if you omit use_ssl and use_tls the port number is used to
+#       auto-detect: port 465 → SSL, everything else → STARTTLS.
+#
+# Gmail:
+#   host: smtp.gmail.com
+#   port: 587          # or 465 with use_ssl: true
+#   use_tls: true
+#   username: you@gmail.com
+#   password: 'abcd efgh ijkl mnop'   # 16-char App Password (NOT your account password)
+#                                     # Create at: myaccount.google.com/apppasswords
+#                                     # Requires 2-Step Verification to be enabled
+#
+# Microsoft 365 / Outlook:
+#   host: smtp.office365.com
+#   port: 587
+#   use_tls: true
+#   username: you@company.com
+#   password: 'your-password'
+#   # If auth fails, an admin must enable SMTP AUTH for your mailbox in
+#   # the Microsoft 365 admin centre (Settings › Mail › POP/IMAP/SMTP)
+#
+# Local relay (no auth):
+#   host: 127.0.0.1
+#   port: 25
+#   use_ssl: false
+#   use_tls: false
+#   username: ''
+#   password: ''
+# ------------------------------------------------------------
+smtp:
+  host: "smtp.gmail.com"
+  port: 587
+  use_ssl: false   # true = implicit SSL on port 465; false = STARTTLS on port 587
+  use_tls: true
+  username: "your-email@gmail.com"
+  password: 'your-app-password'        # Use single quotes — safe for all special characters
+  from_address: "your-email@gmail.com"
+
+# ------------------------------------------------------------
+# Email report settings
+# ------------------------------------------------------------
+email:
+  recipients:
+    - "admin@company.com"
+    - "it-support@company.com"
+
+  # Optional: override the auto-generated subject line
+  # subject: "Monthly HP Printer Report – April 2026"
+
+# ------------------------------------------------------------
+# Alerts
+# Toner levels below toner_low_threshold % are flagged in the
+# report with a warning and highlighted in the HTML email.
+# ------------------------------------------------------------
+alerts:
+  toner_low_threshold: 20
+
+# ------------------------------------------------------------
+# Historical CSV storage
+# A row is appended on every run.  Set csv_file to an absolute
+# path if you want the data stored outside the project folder.
+# ------------------------------------------------------------
+storage:
+  csv_file: "printer_history.csv"
+
+# ------------------------------------------------------------
+# Logging
+# level: DEBUG | INFO | WARNING | ERROR | CRITICAL
+# file:  path to the rotating log file
+# ------------------------------------------------------------
+logging:
+  level: "INFO"
+  file: "printer_collector.log"
