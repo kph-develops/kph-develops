@@ -156,9 +156,9 @@ def _parse_count_element(soup: BeautifulSoup, element_id: str) -> Optional[int]:
     raw = element.get_text(strip=True)
     logger.debug("Raw page count text for %r: %r", element_id, raw)
 
-    numeric_str = raw.replace(",", "").replace(".", "").strip()
+    numeric_str = raw.replace(",", "").strip()
     try:
-        return int(numeric_str)
+        return int(float(numeric_str))
     except ValueError:
         logger.warning("Could not convert %r to integer for element %r", raw, element_id)
         return None
