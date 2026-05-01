@@ -329,3 +329,64 @@ def collect_printer_data(printer: dict, timeout: int = 15) -> dict:
     )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Discovery helper — identifies correct element IDs for a specific printer
+# ---------------------------------------------------------------------------
+
+
+def discover_elements(ip: str, timeout: int = 15) -> None:
+    """
+    Fetch both printer pages and print every element that has an id attribute,
+    grouped by page.  Use this to find the correct element IDs when the default
+    ones do not match your specific printer model or firmware version.
+
+    Run via:  python main.py --discover --config config.yaml
+    """
+    def _dump_page(label: str, endpoint: str) -> None:
+        html = fetch_page(ip, endpoint, timeout=timeout)
+        if not html:
+            print(f"  ERROR: could not fetch {endpoint}")
+            return
+
+        soup = BeautifulSoup(html, "html.parser")
+        elements = soup.find_all(attrs={"id": True})
+
+        rows = []
+        for el in elements:
+            text = el.get_text(separator=" ", strip=True)
+            if text:
+                rows.append((el.name, el["id"], text))
+
+        if not rows:
+            print("  (no elements with id attributes and visible text found)")
+            return
+
+        tag_w = max(len(r[0]) for r in rows)
+        id_w  = min(max(len(r[1]) for r in rows), 72)
+        val_w = 30
+
+        header = f"  {'TAG':<{tag_w}}  {'ELEMENT ID':<{id_w}}  VALUE"
+        print(header)
+        print("  " + "-" * (len(header) - 2))
+        for tag, eid, val in rows:
+            val_display = val[:val_w] + "..." if len(val) > val_w else val
+            print(f"  {tag:<{tag_w}}  {eid:<{id_w}}  {val_display}")
+
+    print()
+    print("=" * 78)
+    print(f"  Element discovery for printer: {ip}")
+    print("=" * 78)
+
+    print(f"\n--- Usage Page ({USAGE_ENDPOINT}) ---\n")
+    _dump_page("Usage Page", USAGE_ENDPOINT)
+
+    print(f"\n--- Supplies Status Page ({SUPPLIES_ENDPOINT}) ---\n")
+    _dump_page("Supplies Status", SUPPLIES_ENDPOINT)
+
+    print()
+    print("Use the ELEMENT ID values above to update PAGE_COUNT_IDS and")
+    print("TONER_IDS in hp_printer_collector/scraper.py if the defaults")
+    print("do not match your printer's firmware.")
+    print()

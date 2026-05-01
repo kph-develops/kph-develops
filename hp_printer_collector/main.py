@@ -34,7 +34,7 @@ from typing import Optional
 import yaml
 
 from hp_printer_collector.logger_setup import setup_logger
-from hp_printer_collector.scraper import collect_printer_data
+from hp_printer_collector.scraper import collect_printer_data, discover_elements
 from hp_printer_collector.email_reporter import send_report, test_smtp_connection
 from hp_printer_collector.storage import save_to_csv
 
@@ -115,6 +115,12 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--test-smtp",
         action="store_true",
         help="Test SMTP credentials and exit without collecting printer data.",
+    )
+    parser.add_argument(
+        "--discover",
+        action="store_true",
+        help="Print all element IDs and values from the printer pages, then exit. "
+             "Use this to find correct IDs when values are wrong or missing.",
     )
     return parser.parse_args(argv)
 
@@ -201,6 +207,14 @@ def run(config_path: str, send_email: bool = True, write_csv: bool = True) -> in
 
 def main() -> None:
     args = parse_args()
+
+    if args.discover:
+        cfg = load_config(args.config)
+        setup_logger(log_file="printer_collector.log", level="WARNING")
+        timeout = cfg.get("timeout", 15)
+        for printer in cfg["printers"]:
+            discover_elements(printer["ip"], timeout=timeout)
+        sys.exit(0)
 
     if args.test_smtp:
         cfg = load_config(args.config)
