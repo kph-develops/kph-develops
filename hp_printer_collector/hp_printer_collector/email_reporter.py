@@ -81,8 +81,18 @@ def _build_plain_text(printer_results: List[dict], report_date: str, threshold: 
             def _fmt(n):
                 return f"{n:,}" if isinstance(n, int) else "N/A"
 
+            first_run = result.get("first_run", False)
+            monthly_note = "(first run — baseline recorded, delta available next month)" if first_run else ""
+            serial = result.get("serial_number") or "N/A"
+
             lines += [
-                f"  Page count    : {_fmt(result.get('page_count'))}",
+                f"  Serial number : {serial}",
+                "  Pages printed this month",
+                f"    Total       : {_fmt(result.get('monthly_total'))}  {monthly_note}".rstrip(),
+                f"    Color       : {_fmt(result.get('monthly_color'))}",
+                f"    Monochrome  : {_fmt(result.get('monthly_mono'))}",
+                "  Lifetime page count",
+                f"    Total       : {_fmt(result.get('page_count'))}",
                 f"    Color       : {_fmt(result.get('page_count_color'))}",
                 f"    Monochrome  : {_fmt(result.get('page_count_mono'))}",
                 "  Toner levels",
@@ -159,9 +169,20 @@ def _build_html(printer_results: List[dict], report_date: str, threshold: int) -
         def _fmt(n):
             return f"{n:,}" if isinstance(n, int) else "N/A"
 
-        total_str   = _fmt(result.get("page_count"))
-        color_str   = _fmt(result.get("page_count_color"))
-        mono_str    = _fmt(result.get("page_count_mono"))
+        first_run    = result.get("first_run", False)
+        first_run_note = (
+            '<tr><td colspan="2"><em>First run &mdash; baseline recorded. '
+            'Monthly delta will appear from next month onwards.</em></td></tr>'
+            if first_run else ""
+        )
+
+        serial  = result.get("serial_number") or "N/A"
+        m_total = _fmt(result.get("monthly_total"))
+        m_color = _fmt(result.get("monthly_color"))
+        m_mono  = _fmt(result.get("monthly_mono"))
+        l_total = _fmt(result.get("page_count"))
+        l_color = _fmt(result.get("page_count_color"))
+        l_mono  = _fmt(result.get("page_count_mono"))
 
         # Toner cells with conditional colouring
         black_td   = _toner_cell(result.get("toner_black"),   threshold)
@@ -171,10 +192,17 @@ def _build_html(printer_results: List[dict], report_date: str, threshold: int) -
 
         rows_html += f"""
 <table>
-  <tr><th colspan="2">Page Count</th></tr>
-  <tr><td><strong>Total</strong></td><td>{total_str}</td></tr>
-  <tr><td>&nbsp;&nbsp;Color</td><td>{color_str}</td></tr>
-  <tr><td>&nbsp;&nbsp;Monochrome</td><td>{mono_str}</td></tr>
+  <tr><th colspan="2">Printer Information</th></tr>
+  <tr><td><strong>Serial Number</strong></td><td>{serial}</td></tr>
+  <tr><th colspan="2">Pages Printed This Month</th></tr>
+  {first_run_note}
+  <tr><td><strong>Total</strong></td><td>{m_total}</td></tr>
+  <tr><td>&nbsp;&nbsp;Color</td><td>{m_color}</td></tr>
+  <tr><td>&nbsp;&nbsp;Monochrome</td><td>{m_mono}</td></tr>
+  <tr><th colspan="2">Lifetime Page Count</th></tr>
+  <tr><td><strong>Total</strong></td><td>{l_total}</td></tr>
+  <tr><td>&nbsp;&nbsp;Color</td><td>{l_color}</td></tr>
+  <tr><td>&nbsp;&nbsp;Monochrome</td><td>{l_mono}</td></tr>
   <tr><th colspan="2">Toner Levels</th></tr>
   <tr><td><strong>Black</strong></td>{black_td}</tr>
   <tr><td><strong>Cyan</strong></td>{cyan_td}</tr>

@@ -114,6 +114,16 @@ alerts:
   toner_low_threshold: 20
 
 # ------------------------------------------------------------
+# Snapshot database (SQLite)
+# Stores the page count from each run so the monthly delta
+# (pages printed this month) can be calculated automatically.
+# The file is created on first run.  Use an absolute path if
+# you want it stored outside the project folder.
+# ------------------------------------------------------------
+database:
+  path: "printer_snapshots.db"
+
+# ------------------------------------------------------------
 # Historical CSV storage
 # A row is appended on every run.  Set csv_file to an absolute
 # path if you want the data stored outside the project folder.

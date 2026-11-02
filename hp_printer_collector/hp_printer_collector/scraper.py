@@ -22,8 +22,18 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger(__name__)
 
 # HP printer endpoints
-USAGE_ENDPOINT = "/hp/device/InternalPages/Index?id=UsagePage"
+USAGE_ENDPOINT    = "/hp/device/InternalPages/Index?id=UsagePage"
 SUPPLIES_ENDPOINT = "/hp/device/InternalPages/Index?id=SuppliesStatus"
+CONFIG_ENDPOINT   = "/hp/device/InternalPages/Index?id=ConfigurationPage"
+
+# Candidate element IDs for the serial number on the Configuration page.
+# HP firmware varies; the list is tried in order and the first match wins.
+SERIAL_NUMBER_IDS = [
+    "ConfigPage.ProductSerialNumber",
+    "ConfigPage.SerialNumber",
+    "ProductSerialNumber",
+    "SerialNumber",
+]
 
 # Element IDs for toner levels on the Supplies Status page
 TONER_IDS = {
@@ -103,6 +113,46 @@ def _find_by_id(soup: BeautifulSoup, element_id: str):
     id string as CSS class separators.
     """
     return soup.find(attrs={"id": element_id})
+
+
+def parse_serial_number(html: str) -> Optional[str]:
+    """
+    Extract the product serial number from the Configuration Page HTML.
+
+    Tries each ID in SERIAL_NUMBER_IDS in order (firmware varies by model).
+    If none match by ID, falls back to searching for a table cell whose
+    neighbour label contains 'serial number', which handles older firmware
+    that uses plain text labels without element IDs.
+
+    Returns the serial number string, or None if not found.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Strategy 1: try known element IDs
+    for eid in SERIAL_NUMBER_IDS:
+        element = _find_by_id(soup, eid)
+        if element:
+            value = element.get_text(strip=True)
+            if value:
+                logger.debug("Serial number found via id=%r: %r", eid, value)
+                return value
+
+    # Strategy 2: find a <td> or <span> whose preceding sibling cell
+    # contains the text "serial number" (case-insensitive)
+    for cell in soup.find_all(["td", "th", "span", "div"]):
+        if "serial number" in cell.get_text(strip=True).lower():
+            # The value is usually in the next sibling element
+            sibling = cell.find_next_sibling()
+            if sibling:
+                value = sibling.get_text(strip=True)
+                if value:
+                    logger.debug("Serial number found via label search: %r", value)
+                    return value
+
+    logger.warning(
+        "Serial number not found. Run --discover to inspect Configuration Page element IDs."
+    )
+    return None
 
 
 def _clean_percent(raw: str) -> Optional[str]:
@@ -276,6 +326,7 @@ def collect_printer_data(printer: dict, timeout: int = 15) -> dict:
     result = {
         "name": name,
         "ip": ip,
+        "serial_number": None,
         "page_count": None,
         "page_count_color": None,
         "page_count_mono": None,
@@ -287,6 +338,13 @@ def collect_printer_data(printer: dict, timeout: int = 15) -> dict:
     }
 
     logger.info("Collecting data from printer '%s' (%s)", name, ip)
+
+    # --- Configuration page (serial number) ---
+    config_html = fetch_page(ip, CONFIG_ENDPOINT, timeout=timeout)
+    if config_html:
+        result["serial_number"] = parse_serial_number(config_html)
+    else:
+        logger.warning("Could not fetch configuration page for '%s'; serial number unavailable", name)
 
     # --- Usage page (page counts) ---
     usage_html = fetch_page(ip, USAGE_ENDPOINT, timeout=timeout)
@@ -317,8 +375,9 @@ def collect_printer_data(printer: dict, timeout: int = 15) -> dict:
     result["toner_magenta"] = toner["magenta"]
 
     logger.info(
-        "Collected data for '%s': total=%s  color=%s  mono=%s  B=%s  C=%s  Y=%s  M=%s",
+        "Collected data for '%s': serial=%s  total=%s  color=%s  mono=%s  B=%s  C=%s  Y=%s  M=%s",
         name,
+        result["serial_number"],
         result["page_count"],
         result["page_count_color"],
         result["page_count_mono"],
@@ -384,6 +443,9 @@ def discover_elements(ip: str, timeout: int = 15) -> None:
 
     print(f"\n--- Supplies Status Page ({SUPPLIES_ENDPOINT}) ---\n")
     _dump_page("Supplies Status", SUPPLIES_ENDPOINT)
+
+    print(f"\n--- Configuration Page ({CONFIG_ENDPOINT}) ---\n")
+    _dump_page("Configuration Page", CONFIG_ENDPOINT)
 
     print()
     print("Use the ELEMENT ID values above to update PAGE_COUNT_IDS and")
