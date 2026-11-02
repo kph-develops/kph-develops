@@ -37,6 +37,7 @@ from hp_printer_collector.logger_setup import setup_logger
 from hp_printer_collector.scraper import collect_printer_data, discover_elements
 from hp_printer_collector.email_reporter import send_report, test_smtp_connection
 from hp_printer_collector.storage import save_to_csv
+from hp_printer_collector.database import init_db, get_previous_snapshot, save_snapshots
 
 # Module-level logger; configured properly after config is loaded.
 logger = logging.getLogger("hp_printer_collector")
@@ -160,6 +161,50 @@ def run(config_path: str, send_email: bool = True, write_csv: bool = True) -> in
         results.append(result)
         if result.get("error"):
             all_success = False
+
+    # --- Monthly delta calculation ---
+    db_path = cfg.get("database", {}).get("path", "printer_snapshots.db")
+    init_db(db_path)
+
+    def _delta(current, previous):
+        """Subtract previous from current; return None if either is missing."""
+        if current is None or previous is None:
+            return None
+        return max(current - previous, 0)  # guard against counter resets
+
+    for result in results:
+        if result.get("error"):
+            result["monthly_total"] = None
+            result["monthly_color"] = None
+            result["monthly_mono"]  = None
+            result["first_run"]     = False
+            continue
+
+        prev = get_previous_snapshot(result["ip"], db_path)
+        if prev is None:
+            result["monthly_total"] = None
+            result["monthly_color"] = None
+            result["monthly_mono"]  = None
+            result["first_run"]     = True
+            logger.info(
+                "First run for '%s' — no previous snapshot; monthly delta unavailable",
+                result.get("name", result["ip"]),
+            )
+        else:
+            result["monthly_total"] = _delta(result.get("page_count"),       prev.get("page_count"))
+            result["monthly_color"] = _delta(result.get("page_count_color"), prev.get("page_count_color"))
+            result["monthly_mono"]  = _delta(result.get("page_count_mono"),  prev.get("page_count_mono"))
+            result["first_run"]     = False
+            logger.info(
+                "Monthly delta for '%s': total=%s  color=%s  mono=%s",
+                result.get("name", result["ip"]),
+                result["monthly_total"],
+                result["monthly_color"],
+                result["monthly_mono"],
+            )
+
+    # Save snapshots AFTER reading previous ones so the order is correct
+    save_snapshots(results, db_path)
 
     # --- Save to CSV ---
     if write_csv:

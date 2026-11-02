@@ -23,6 +23,9 @@ CSV_COLUMNS = [
     "page_count",
     "page_count_color",
     "page_count_mono",
+    "monthly_total",
+    "monthly_color",
+    "monthly_mono",
     "toner_black",
     "toner_cyan",
     "toner_yellow",
@@ -73,17 +76,20 @@ def save_to_csv(printer_results: List[dict], csv_path: str) -> None:
 
             for result in printer_results:
                 row = {
-                    "timestamp": timestamp,
-                    "printer_name": result.get("name", ""),
-                    "printer_ip": result.get("ip", ""),
-                    "page_count": result.get("page_count", ""),
+                    "timestamp":        timestamp,
+                    "printer_name":     result.get("name", ""),
+                    "printer_ip":       result.get("ip", ""),
+                    "page_count":       result.get("page_count", ""),
                     "page_count_color": result.get("page_count_color", ""),
-                    "page_count_mono": result.get("page_count_mono", ""),
-                    "toner_black": result.get("toner_black", ""),
-                    "toner_cyan": result.get("toner_cyan", ""),
-                    "toner_yellow": result.get("toner_yellow", ""),
-                    "toner_magenta": result.get("toner_magenta", ""),
-                    "error": result.get("error", ""),
+                    "page_count_mono":  result.get("page_count_mono", ""),
+                    "monthly_total":    result.get("monthly_total", ""),
+                    "monthly_color":    result.get("monthly_color", ""),
+                    "monthly_mono":     result.get("monthly_mono", ""),
+                    "toner_black":      result.get("toner_black", ""),
+                    "toner_cyan":       result.get("toner_cyan", ""),
+                    "toner_yellow":     result.get("toner_yellow", ""),
+                    "toner_magenta":    result.get("toner_magenta", ""),
+                    "error":            result.get("error", ""),
                 }
                 writer.writerow(row)
                 logger.debug("Saved row for printer '%s'", result.get("name", result.get("ip")))
