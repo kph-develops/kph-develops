@@ -83,8 +83,10 @@ def _build_plain_text(printer_results: List[dict], report_date: str, threshold: 
 
             first_run = result.get("first_run", False)
             monthly_note = "(first run — baseline recorded, delta available next month)" if first_run else ""
+            serial = result.get("serial_number") or "N/A"
 
             lines += [
+                f"  Serial number : {serial}",
                 "  Pages printed this month",
                 f"    Total       : {_fmt(result.get('monthly_total'))}  {monthly_note}".rstrip(),
                 f"    Color       : {_fmt(result.get('monthly_color'))}",
@@ -174,6 +176,7 @@ def _build_html(printer_results: List[dict], report_date: str, threshold: int) -
             if first_run else ""
         )
 
+        serial  = result.get("serial_number") or "N/A"
         m_total = _fmt(result.get("monthly_total"))
         m_color = _fmt(result.get("monthly_color"))
         m_mono  = _fmt(result.get("monthly_mono"))
@@ -189,6 +192,8 @@ def _build_html(printer_results: List[dict], report_date: str, threshold: int) -
 
         rows_html += f"""
 <table>
+  <tr><th colspan="2">Printer Information</th></tr>
+  <tr><td><strong>Serial Number</strong></td><td>{serial}</td></tr>
   <tr><th colspan="2">Pages Printed This Month</th></tr>
   {first_run_note}
   <tr><td><strong>Total</strong></td><td>{m_total}</td></tr>
